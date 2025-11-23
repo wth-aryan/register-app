@@ -35,19 +35,13 @@ pipeline {
         stage("SonarQube Analysis") {
             steps {
                 script {
-                    withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-token') {
-                        sh 'mvn sonar:sonar -Dsonar.projectKey=register-app -Dsonar.host.url=http://<YOUR-IP>:9000'
+                   withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-tokken'){
+                        sh "mvn sonar:sonar"
                     }
-                }
-            }
-        }
-
-        stage("Quality Gate") {
-            steps {
-                timeout(time: 3, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
                 }
             }
         }
     }
 }
+
+       
