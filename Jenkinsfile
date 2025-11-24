@@ -12,7 +12,6 @@ pipeline {
         DOCKER_PASS = 'dockerhub'
         IMAGE_NAME = "${DOCKER_USER}" + "/" + "${APP_NAME}"
         IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
-     
     }
     
     stages{
@@ -40,21 +39,35 @@ pipeline {
             }
         }
         
-         stage("SonarQube Analysis"){
-             steps {
-        script {
-            withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-token') { 
-                sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar"
+        stage("SonarQube Analysis"){
+            steps {
+                script {
+                    withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-token') { 
+                        sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar"
+                    }
+                } 
             }
-        } 
-    }
-}
+        }
         
         stage('Quality Gate') {
-          steps {
-             waitForQualityGate abortPipeline: false, credentialsId: 'jenkins-sonarqube-token'
-    }
-}
+            steps {
+                waitForQualityGate abortPipeline: false, credentialsId: 'jenkins-sonarqube-token'
+            }
+        }
 
+        stage("Build & Push Docker Image") {
+            steps {
+                script {
+                    docker.withRegistry('', DOCKER_PASS) {
+                        docker_image = docker.build("${IMAGE_NAME}")
+                    }
+
+                    docker.withRegistry('', DOCKER_PASS) {
+                        docker_image.push("${IMAGE_TAG}")
+                        docker_image.push("latest")
+                    }
+                }
+            }
+        }
     }
 }
