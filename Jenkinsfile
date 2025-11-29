@@ -68,7 +68,7 @@ pipeline {
             }
         }
 
-        stage("Trivy Scan") {
+      stage("Trivy Scan") {
             steps {
                 script {
                     sh """
@@ -77,13 +77,15 @@ pipeline {
                         chmod 777 .trivy-cache
 
                         # Run Trivy Scan
-                        # Added -e TMPDIR to force downloads to the mounted volume
+                        # 1. We map .trivy-cache to /tmp inside the container to prevent space issues
+                        # 2. We set TMPDIR to /tmp to ensure tools use it
                         docker run --rm \\
                         -v /var/run/docker.sock:/var/run/docker.sock \\
                         -v \$(pwd)/.trivy-cache:/var/trivy-cache \\
+                        -v \$(pwd)/.trivy-cache:/tmp \\
                         -e TRIVY_CACHE_DIR=/var/trivy-cache \\
                         -e TRIVY_TMP_DIR=/var/trivy-cache \\
-                        -e TMPDIR=/var/trivy-cache \\
+                        -e TMPDIR=/tmp \\
                         aquasec/trivy image ${IMAGE_NAME}:latest \\
                         --no-progress \\
                         --scanners vuln \\
@@ -94,6 +96,7 @@ pipeline {
                 }
             }
         }
+        
         stage ('Cleanup Artifacts') {
             steps {
                 script {
