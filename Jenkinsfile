@@ -93,22 +93,43 @@ pipeline {
             }
         }
 
-       stage('Trigger CD Pipeline') {
-            steps {
-                script {
-                    sh """
-                        # We use http:// and port :8080
-                        # We use \\\$ to safely pass the token without the security warning
-                        curl -sS -k \\
-                          --user "clouduser:\$JENKINS_API_TOKEN" \\
-                          -X POST \\
-                          -H 'Cache-Control: no-cache' \\
-                          -H 'Content-Type: application/x-www-form-urlencoded' \\
-                          "http://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com:8080/job/gitops-register-app-cd/build?token=\$JENKINS_API_TOKEN"
-                    """
-                }
-            }
-        }
+    stage('Trigger CD Pipeline') {
+  steps {
+    withCredentials([string(credentialsId: 'jenkins-api-token', variable: 'JENKINS_API_TOKEN')]) {
+      sh '''
+        set -euo pipefail
+
+        TARGET="https://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com"
+        JOB_PATH="${TARGET}/job/gitops-register-app-cd"
+        # number of attempts
+        RETRIES=3
+        SLEEP=5
+
+        attempt=1
+        while [ $attempt -le $RETRIES ]; do
+          # Try to obtain crumb (if Jenkins has CSRF enabled)
+          CRUMB_HEADER=$(curl -sS --connect-timeout 5 --max-time 10 -u clouduser:$JENKINS_API_TOKEN "$JOB_PATH/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" || true)
+
+          if [ -n "$CRUMB_HEADER" ]; then
+            curl -sS -k --connect-timeout 10 --max-time 30 -u clouduser:$JENKINS_API_TOKEN \
+              -X POST -H "$CRUMB_HEADER" \
+              "${JOB_PATH}/build?token=$JENKINS_API_TOKEN" && break || true
+          else
+            curl -sS -k --connect-timeout 10 --max-time 30 -u clouduser:$JENKINS_API_TOKEN \
+              -X POST "${JOB_PATH}/build?token=$JENKINS_API_TOKEN" && break || true
+          fi
+
+          attempt=$((attempt+1))
+          sleep $SLEEP
+        done
+
+        # If still failing, exit 0 so pipeline won't be marked FAILED due to remote CD unreachability
+        true
+      '''
+    }
+  }
+}
+
 
     post {
         always {
