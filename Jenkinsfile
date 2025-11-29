@@ -69,12 +69,31 @@ pipeline {
         }
 
      stage("Trivy Scan") {
-           steps {
-               script {
-	            sh ('docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ashfaque9x/register-app-pipeline:latest --no-progress --scanners vuln  --exit-code 0 --severity HIGH,CRITICAL --format table')
-               }
-           }
-       }
+            steps {
+                script {
+                    sh """
+                        # Define cache directory using Jenkins WORKSPACE variable
+                        CACHE_DIR=${WORKSPACE}/.trivy-cache
+                        mkdir -p \$CACHE_DIR
+                        chmod 777 \$CACHE_DIR
+
+                        # Run Trivy
+                        # We use \\ to escape line breaks for readability
+                        docker run --rm \\
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        -v \$CACHE_DIR:/var/trivy-cache \\
+                        -e TRIVY_CACHE_DIR=/var/trivy-cache \\
+                        -e TRIVY_TMP_DIR=/var/trivy-cache \\
+                        aquasec/trivy image ${IMAGE_NAME}:latest \\
+                        --no-progress \\
+                        --scanners vuln \\
+                        --exit-code 0 \\
+                        --severity HIGH,CRITICAL \\
+                        --format table
+                    """
+                }
+            }
+        }
 
 
         stage ('Cleanup Artifacts') {
