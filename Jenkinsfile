@@ -4,52 +4,52 @@ pipeline {
         jdk 'java17'
         maven 'Maven3'
     }
-    
+
     environment {
         APP_NAME = "register-app-pipeline"
         RELEASE = "1.0.0"
         DOCKER_USER = "wtharyan"
         DOCKER_PASS = 'dockerhub'
-        IMAGE_NAME = "${DOCKER_USER}" + "/" + "${APP_NAME}"
+        IMAGE_NAME = "${DOCKER_USER}/${APP_NAME}"
         IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
         JENKINS_API_TOKEN = credentials("JENKINS_API_TOKEN")
     }
-    
-    stages{
-        stage("Cleanup Workspace"){
+
+    stages {
+        stage("Cleanup Workspace") {
             steps {
                 cleanWs()
             }
         }
 
-        stage("Checkout from SCM"){
+        stage("Checkout from SCM") {
             steps {
                 git branch: 'main', credentialsId: 'github', url: 'https://github.com/wth-aryan/register-app'
             }
         }
 
-        stage("Build Application"){
+        stage("Build Application") {
             steps {
                 sh "mvn clean package"
             }
         }
 
-        stage("Test Application"){
+        stage("Test Application") {
             steps {
                 sh "mvn test"
             }
         }
-        
-        stage("SonarQube Analysis"){
+
+        stage("SonarQube Analysis") {
             steps {
                 script {
-                    withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-token') { 
+                    withSonarQubeEnv(credentialsId: 'jenkins-sonarqube-token') {
                         sh "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar"
                     }
-                } 
+                }
             }
         }
-        
+
         stage('Quality Gate') {
             steps {
                 waitForQualityGate abortPipeline: false, credentialsId: 'jenkins-sonarqube-token'
@@ -59,47 +59,38 @@ pipeline {
         stage("Build & Push Docker Image") {
             steps {
                 script {
-                    docker_image = docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
-                    docker.withRegistry('', "${DOCKER_PASS}") {
-                        docker_image.push("${IMAGE_TAG}")
-                        docker_image.push("latest")
+                    def dockerImage = docker.build("${env.IMAGE_NAME}:${env.IMAGE_TAG}")
+                    docker.withRegistry('', env.DOCKER_PASS) {
+                        dockerImage.push("${env.IMAGE_TAG}")
+                        dockerImage.push("latest")
                     }
                 }
             }
         }
 
-     stage("Trivy Scan") {
+        stage("Trivy Scan") {
             steps {
                 script {
                     sh """
-                        # Create cache dir with permissions so Docker can write to it
-                        mkdir -p .trivy-cache
-                        chmod 777 .trivy-cache
-
-                        # Run Trivy Scan
-                        # We use \$(pwd) to get the current directory safely
+                        CACHE_DIR="${WORKSPACE}/.trivy-cache"
+                        mkdir -p "\${CACHE_DIR}"
+                        chmod 777 "\${CACHE_DIR}" || true
                         docker run --rm \\
-                        -v /var/run/docker.sock:/var/run/docker.sock \\
-                        -v \$(pwd)/.trivy-cache:/var/trivy-cache \\
-                        -e TRIVY_CACHE_DIR=/var/trivy-cache \\
-                        -e TRIVY_TMP_DIR=/var/trivy-cache \\
-                        aquasec/trivy image ${IMAGE_NAME}:latest \\
-                        --no-progress \\
-                        --scanners vuln \\
-                        --exit-code 0 \\
-                        --severity HIGH,CRITICAL \\
-                        --format table
+                          -v /var/run/docker.sock:/var/run/docker.sock \\
+                          -v "\${CACHE_DIR}":/var/trivy-cache \\
+                          -e TRIVY_CACHE_DIR=/var/trivy-cache \\
+                          -e TRIVY_TMP_DIR=/var/trivy-cache \\
+                          aquasec/trivy image ${env.IMAGE_NAME}:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table
                     """
                 }
             }
         }
 
-
         stage ('Cleanup Artifacts') {
             steps {
                 script {
-                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
-                    sh "docker rmi ${IMAGE_NAME}:latest || true"
+                    sh "docker rmi ${env.IMAGE_NAME}:${env.IMAGE_TAG} || true"
+                    sh "docker rmi ${env.IMAGE_NAME}:latest || true"
                 }
             }
         }
