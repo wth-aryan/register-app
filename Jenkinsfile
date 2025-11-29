@@ -85,39 +85,15 @@ pipeline {
             }
         }
 
-       stage('Trigger CD Pipeline') {
-    steps {
-        withCredentials([string(credentialsId: 'JENKINS_API_TOKEN', variable: 'TOKEN')]) {
-            sh '''
-                set -euo pipefail
-
-                TARGET="http://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com:8080"
-                JOB_PATH="${TARGET}/job/gitops-register-app-cd"
-                RETRIES=3
-                SLEEP=5
-
-                attempt=1
-                while [ $attempt -le $RETRIES ]; do
-                    CRUMB_HEADER=$(curl -sS --connect-timeout 5 --max-time 10 -u aryan:${TOKEN} "${JOB_PATH}/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\\\":\\\",//crumb)" || true)
-
-                    if [ -n "$CRUMB_HEADER" ]; then
-                        curl -sS --connect-timeout 10 --max-time 30 -u aryan:${TOKEN} \
-                            -X POST -H "$CRUMB_HEADER" \
-                            "${JOB_PATH}/build?token=${TOKEN}" && break || true
-                    else
-                        curl -sS --connect-timeout 10 --max-time 30 -u aryan:${TOKEN} \
-                            -X POST "${JOB_PATH}/build?token=${TOKEN}" && break || true
-                    fi
-
-                    attempt=$((attempt+1))
-                    sleep $SLEEP
-                done
-
-                true
-            '''
-        }
+      stage("Trigger CD Pipeline") {
+            steps {
+                script {
+                    sh "curl -v -k --user aryan:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'ec2-13-232-128-192.ap-south-1.compute.amazonaws.com:8080/job/gitops-register-app-cd/buildWithParameters?token=gitops-token'"
+                }
+            }
+       }
     }
-}
+
 
     post {
         always {
