@@ -97,6 +97,8 @@ pipeline {
             steps {
                 script {
                     sh """
+                        # Using http and port 8080
+                        # Using \$ to prevent the security warning
                         curl -sS -k \\
                           --user "clouduser:\$JENKINS_API_TOKEN" \\
                           -X POST \\
@@ -107,7 +109,6 @@ pipeline {
                 }
             }
         }
-    }
 
     post {
         always {
