@@ -72,20 +72,28 @@ pipeline {
             steps {
                 script {
                     sh """
-                        CACHE_DIR="${WORKSPACE}/.trivy-cache"
-                        mkdir -p "\${CACHE_DIR}"
-                        chmod 777 "\${CACHE_DIR}" || true
+                        # Create cache dir
+                        mkdir -p .trivy-cache
+                        chmod 777 .trivy-cache
+
+                        # Run Trivy Scan
+                        # Added -e TMPDIR to force downloads to the mounted volume
                         docker run --rm \\
-                          -v /var/run/docker.sock:/var/run/docker.sock \\
-                          -v "\${CACHE_DIR}":/var/trivy-cache \\
-                          -e TRIVY_CACHE_DIR=/var/trivy-cache \\
-                          -e TRIVY_TMP_DIR=/var/trivy-cache \\
-                          aquasec/trivy image ${env.IMAGE_NAME}:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table
+                        -v /var/run/docker.sock:/var/run/docker.sock \\
+                        -v \$(pwd)/.trivy-cache:/var/trivy-cache \\
+                        -e TRIVY_CACHE_DIR=/var/trivy-cache \\
+                        -e TRIVY_TMP_DIR=/var/trivy-cache \\
+                        -e TMPDIR=/var/trivy-cache \\
+                        aquasec/trivy image ${IMAGE_NAME}:latest \\
+                        --no-progress \\
+                        --scanners vuln \\
+                        --exit-code 0 \\
+                        --severity HIGH,CRITICAL \\
+                        --format table
                     """
                 }
             }
         }
-
         stage ('Cleanup Artifacts') {
             steps {
                 script {
