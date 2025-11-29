@@ -58,11 +58,8 @@ pipeline {
         stage("Build & Push Docker Image") {
             steps {
                 script {
-                    docker.withRegistry('', DOCKER_PASS) {
-                        docker_image = docker.build("${IMAGE_NAME}")
-                    }
-
-                    docker.withRegistry('', DOCKER_PASS) {
+                    docker_image = docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
+                    docker.withRegistry('', "${DOCKER_PASS}") {
                         docker_image.push("${IMAGE_TAG}")
                         docker_image.push("latest")
                     }
@@ -73,7 +70,7 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    sh ('docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ashfaque9x/register-app-pipeline:latest --no-progress --scanners vuln  --exit-code 0 --severity HIGH,CRITICAL --format table')
+                    sh ("docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ${IMAGE_NAME}:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table")
                 }
             }
         }
@@ -81,8 +78,23 @@ pipeline {
         stage ('Cleanup Artifacts') {
             steps {
                 script {
-                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker rmi ${IMAGE_NAME}:latest"
+                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
+                    sh "docker rmi ${IMAGE_NAME}:latest || true"
+                }
+            }
+        }
+
+        stage('Trigger CD Pipeline') {
+            steps {
+                script {
+                    sh """
+                        curl -sS -k \
+                          --user clouduser:${JENKINS_API_TOKEN} \
+                          -X POST \
+                          -H 'Cache-Control: no-cache' \
+                          -H 'Content-Type: application/x-www-form-urlencoded' \
+                          "https://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com/job/gitops-register-app-cd/build?token=${JENKINS_API_TOKEN}"
+                    """
                 }
             }
         }
