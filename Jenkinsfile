@@ -85,40 +85,39 @@ pipeline {
             }
         }
 
-        stage('Trigger CD Pipeline') {
-            steps {
-                withCredentials([string(credentialsId: 'JENKINS_API_TOKEN', variable: 'TOKEN')]) {
-                    sh '''
-                        set -euo pipefail
+       stage('Trigger CD Pipeline') {
+    steps {
+        withCredentials([string(credentialsId: 'JENKINS_API_TOKEN', variable: 'TOKEN')]) {
+            sh '''
+                set -euo pipefail
 
-                        TARGET="http://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com:8080"
-                        JOB_PATH="${TARGET}/job/gitops-register-app-cd"
-                        RETRIES=3
-                        SLEEP=5
+                TARGET="http://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com:8080"
+                JOB_PATH="${TARGET}/job/gitops-register-app-cd"
+                RETRIES=3
+                SLEEP=5
 
-                        attempt=1
-                        while [ $attempt -le $RETRIES ]; do
-                            CRUMB_HEADER=$(curl -sS --connect-timeout 5 --max-time 10 -u clouduser:${TOKEN} "${JOB_PATH}/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\\\":\\\",//crumb)" || true)
+                attempt=1
+                while [ $attempt -le $RETRIES ]; do
+                    CRUMB_HEADER=$(curl -sS --connect-timeout 5 --max-time 10 -u aryan:${TOKEN} "${JOB_PATH}/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\\\":\\\",//crumb)" || true)
 
-                            if [ -n "$CRUMB_HEADER" ]; then
-                                curl -sS --connect-timeout 10 --max-time 30 -u clouduser:${TOKEN} \
-                                    -X POST -H "$CRUMB_HEADER" \
-                                    "${JOB_PATH}/build?token=${TOKEN}" && break || true
-                            else
-                                curl -sS --connect-timeout 10 --max-time 30 -u clouduser:${TOKEN} \
-                                    -X POST "${JOB_PATH}/build?token=${TOKEN}" && break || true
-                            fi
+                    if [ -n "$CRUMB_HEADER" ]; then
+                        curl -sS --connect-timeout 10 --max-time 30 -u aryan:${TOKEN} \
+                            -X POST -H "$CRUMB_HEADER" \
+                            "${JOB_PATH}/build?token=${TOKEN}" && break || true
+                    else
+                        curl -sS --connect-timeout 10 --max-time 30 -u aryan:${TOKEN} \
+                            -X POST "${JOB_PATH}/build?token=${TOKEN}" && break || true
+                    fi
 
-                            attempt=$((attempt+1))
-                            sleep $SLEEP
-                        done
+                    attempt=$((attempt+1))
+                    sleep $SLEEP
+                done
 
-                        true
-                    '''
-                }
-            }
+                true
+            '''
         }
     }
+}
 
     post {
         always {
