@@ -72,13 +72,8 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        rm -rf .trivy-cache
-                        mkdir -p .trivy-cache
-                        chmod 777 .trivy-cache
-
                         docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $(pwd)/.trivy-cache:/root/.cache/trivy \
                         aquasec/trivy image ${IMAGE_NAME}:latest \
                         --no-progress \
                         --scanners vuln \
@@ -129,7 +124,6 @@ pipeline {
         always {
             script {
                 sh 'docker system prune -f || true'
-                sh 'rm -rf .trivy-cache || true'
                 sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
                 sh "docker rmi ${IMAGE_NAME}:latest || true"
                 cleanWs()
