@@ -72,16 +72,15 @@ pipeline {
             steps {
                 script {
                     sh """
-                        # Define cache directory using Jenkins WORKSPACE variable
-                        CACHE_DIR=${WORKSPACE}/.trivy-cache
-                        mkdir -p \$CACHE_DIR
-                        chmod 777 \$CACHE_DIR
+                        # Create cache dir with permissions so Docker can write to it
+                        mkdir -p .trivy-cache
+                        chmod 777 .trivy-cache
 
-                        # Run Trivy
-                        # We use \\ to escape line breaks for readability
+                        # Run Trivy Scan
+                        # We use \$(pwd) to get the current directory safely
                         docker run --rm \\
                         -v /var/run/docker.sock:/var/run/docker.sock \\
-                        -v \$CACHE_DIR:/var/trivy-cache \\
+                        -v \$(pwd)/.trivy-cache:/var/trivy-cache \\
                         -e TRIVY_CACHE_DIR=/var/trivy-cache \\
                         -e TRIVY_TMP_DIR=/var/trivy-cache \\
                         aquasec/trivy image ${IMAGE_NAME}:latest \\
