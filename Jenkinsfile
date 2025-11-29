@@ -71,7 +71,19 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    sh ("docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ${IMAGE_NAME}:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table")
+                    sh '''
+                        CACHE_DIR="${WORKSPACE}/.trivy-cache"
+                        mkdir -p "${CACHE_DIR}"
+                        chmod 777 "${CACHE_DIR}" || true
+
+                        docker run --rm \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v "${CACHE_DIR}":/var/trivy-cache \
+                          -e TRIVY_CACHE_DIR=/var/trivy-cache \
+                          -e TRIVY_TMP_DIR=/var/trivy-cache \
+                          aquasec/trivy image '"${IMAGE_NAME}:latest"' \
+                          --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table
+                    '''
                 }
             }
         }
