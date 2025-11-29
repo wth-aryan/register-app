@@ -71,69 +71,65 @@ pipeline {
         stage("Trivy Scan") {
             steps {
                 script {
-                    sh """
+                    sh '''
+                        rm -rf .trivy-cache
                         mkdir -p .trivy-cache
                         chmod 777 .trivy-cache
 
-                        docker run --rm \\
-                        -v /var/run/docker.sock:/var/run/docker.sock \\
-                        -v \$(pwd)/.trivy-cache:/var/trivy-cache \\
-                        -v \$(pwd)/.trivy-cache:/tmp \\
-                        -e TRIVY_CACHE_DIR=/var/trivy-cache \\
-                        -e TRIVY_TMP_DIR=/var/trivy-cache \\
-                        -e TMPDIR=/tmp \\
-                        aquasec/trivy image ${IMAGE_NAME}:latest \\
-                        --no-progress \\
-                        --scanners vuln \\
-                        --exit-code 0 \\
-                        --severity HIGH,CRITICAL \\
+                        docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v $(pwd)/.trivy-cache:/root/.cache/trivy \
+                        aquasec/trivy image ${IMAGE_NAME}:latest \
+                        --no-progress \
+                        --scanners vuln \
+                        --exit-code 0 \
+                        --severity HIGH,CRITICAL \
                         --format table
-                    """
+                    '''
                 }
             }
         }
 
-    stage('Trigger CD Pipeline') {
-  steps {
-    withCredentials([string(credentialsId: 'jenkins-api-token', variable: 'JENKINS_API_TOKEN')]) {
-      sh '''
-        set -euo pipefail
+        stage('Trigger CD Pipeline') {
+            steps {
+                withCredentials([string(credentialsId: 'JENKINS_API_TOKEN', variable: 'TOKEN')]) {
+                    sh '''
+                        set -euo pipefail
 
-        TARGET="https://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com"
-        JOB_PATH="${TARGET}/job/gitops-register-app-cd"
-        # number of attempts
-        RETRIES=3
-        SLEEP=5
+                        TARGET="http://ec2-13-61-154-102.eu-north-1.compute.amazonaws.com:8080"
+                        JOB_PATH="${TARGET}/job/gitops-register-app-cd"
+                        RETRIES=3
+                        SLEEP=5
 
-        attempt=1
-        while [ $attempt -le $RETRIES ]; do
-          # Try to obtain crumb (if Jenkins has CSRF enabled)
-          CRUMB_HEADER=$(curl -sS --connect-timeout 5 --max-time 10 -u clouduser:$JENKINS_API_TOKEN "$JOB_PATH/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)" || true)
+                        attempt=1
+                        while [ $attempt -le $RETRIES ]; do
+                            CRUMB_HEADER=$(curl -sS --connect-timeout 5 --max-time 10 -u clouduser:${TOKEN} "${JOB_PATH}/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\\\":\\\",//crumb)" || true)
 
-          if [ -n "$CRUMB_HEADER" ]; then
-            curl -sS -k --connect-timeout 10 --max-time 30 -u clouduser:$JENKINS_API_TOKEN \
-              -X POST -H "$CRUMB_HEADER" \
-              "${JOB_PATH}/build?token=$JENKINS_API_TOKEN" && break || true
-          else
-            curl -sS -k --connect-timeout 10 --max-time 30 -u clouduser:$JENKINS_API_TOKEN \
-              -X POST "${JOB_PATH}/build?token=$JENKINS_API_TOKEN" && break || true
-          fi
+                            if [ -n "$CRUMB_HEADER" ]; then
+                                curl -sS --connect-timeout 10 --max-time 30 -u clouduser:${TOKEN} \
+                                    -X POST -H "$CRUMB_HEADER" \
+                                    "${JOB_PATH}/build?token=${TOKEN}" && break || true
+                            else
+                                curl -sS --connect-timeout 10 --max-time 30 -u clouduser:${TOKEN} \
+                                    -X POST "${JOB_PATH}/build?token=${TOKEN}" && break || true
+                            fi
 
-          attempt=$((attempt+1))
-          sleep $SLEEP
-        done
+                            attempt=$((attempt+1))
+                            sleep $SLEEP
+                        done
 
-        # If still failing, exit 0 so pipeline won't be marked FAILED due to remote CD unreachability
-        true
-      '''
+                        true
+                    '''
+                }
+            }
+        }
     }
-  }
-}
-
 
     post {
         always {
             script {
+                sh 'docker system prune -f || true'
+                sh 'rm -rf .trivy-cache || true'
                 sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
                 sh "docker rmi ${IMAGE_NAME}:latest || true"
                 cleanWs()
