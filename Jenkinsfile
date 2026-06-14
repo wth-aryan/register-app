@@ -77,7 +77,7 @@ pipeline {
                         aquasec/trivy image ${IMAGE_NAME}:latest \
                         --no-progress \
                         --scanners vuln \
-                        --exit-code 0 \
+                        --exit-code 1 \
                         --severity HIGH,CRITICAL \
                         --format table
                     '''
